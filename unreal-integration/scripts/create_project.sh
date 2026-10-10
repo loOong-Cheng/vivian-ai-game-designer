@@ -63,6 +63,8 @@ r.Shadow.Virtual.Enable=1
 ; hair shadow on skin: 0.1 cm voxels (0.3 cm showed stair steps), supersampled deep shadows
 r.HairStrands.Voxelization.Virtual.VoxelWorldSize=0.1
 r.HairStrands.DeepShadow.SuperSampling=1
+; sharper virtual shadow pages for the small split-screen panes (shadow edges were saw-toothed)
+r.Shadow.Virtual.ResolutionLodBiasDirectional=-1.5
 
 [/Script/WindowsTargetPlatform.WindowsTargetSettings]
 DefaultGraphicsRHI=DefaultGraphicsRHI_DX12

@@ -111,8 +111,11 @@ def render_fixes():
       with two panes the hair swapped strands <-> cards every frame and flickered. Pin LOD 0.
     - The hair's shadow on the skin had 0.3 cm stair steps = the hair voxel size: voxels 0.1 cm, deep shadows on the
       sun (supersampled), sun angle 1 deg for a softer edge.
-    - Peach fuzz drew a dotted bright/dark line along the jaw silhouette: hidden."""
-    for cmd in ("r.HairStrands.Voxelization.Virtual.VoxelWorldSize 0.1", "r.HairStrands.DeepShadow.SuperSampling 1"):
+    - Peach fuzz drew a dotted bright/dark line along the jaw silhouette: hidden.
+    - Shadow edges (hair on the face, box on the table) were saw-toothed: virtual shadow maps pick their resolution
+      from the small panes. Directional LOD bias -1.5 = sharper pages; edges came out straight."""
+    for cmd in ("r.HairStrands.Voxelization.Virtual.VoxelWorldSize 0.1", "r.HairStrands.DeepShadow.SuperSampling 1",
+                "r.Shadow.Virtual.ResolutionLodBiasDirectional -1.5"):
         unreal.SystemLibrary.execute_console_command(None, cmd)
     for a in EAS.get_all_level_actors():
         sync = a.get_component_by_class(unreal.LODSyncComponent)
