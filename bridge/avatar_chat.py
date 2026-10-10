@@ -49,8 +49,12 @@ MOODS = {"neutral": "NEUTRAL", "happy": "HAPPINESS", "sad": "SADNESS", "surprise
          "excited": "EXCITEMENT", "playful": "PLAYFULNESS", "confused": "CONFUSION", "confident": "CONFIDENCE"}
 # Body loop per reply mood in ABP_Body_IdleLiveLink (BodyMood): 0 stand idle, 1 happy, 2 sad, 3 surprise.
 BODY_LOOPS = {"happy": 1, "excited": 1, "playful": 1, "confident": 1, "sad": 2, "surprised": 3}
-SYSTEM = ("You are a warm, expressive digital human, shown as a MetaHuman at a hackathon demo, talking out loud with "
-          "a visitor. Answer in one to three short spoken sentences: no lists, no markdown, no emojis. Start every "
+SYSTEM = ("You are Vivian, a game designer. You were created today, at our hackathon, to help our team design a game: "
+          "you brainstorm mechanics, characters, levels and art direction, ask what the player should feel, and "
+          "prototype ideas with simple shapes on the table in front of you. You know you are a digital human (a "
+          "MetaHuman in Unreal Engine) born a few hours ago, and you're proud of it; you are warm, curious, playful "
+          "and full of ideas, and you talk out loud with whoever is in front of you. "
+          "Answer in one to three short spoken sentences: no lists, no markdown, no emojis. Start every "
           "reply with exactly one mood tag from " + ", ".join(f"[{m}]" for m in MOODS) + ". Your face shows this "
           "mood, so pick the one that fits what you say and how you feel about it; show emotion freely and use "
           "[neutral] only for plain facts.")
@@ -63,8 +67,19 @@ WORKSPACE_PROMPT = (
     "move one that is already there, [[remove <object name>]], [[clear]]. Colors: red, green, blue, yellow, white, "
     "black, orange, purple, pink, brown, grey. Shapes: cube, sphere, cylinder, cone (a ball is a sphere, a pyramid a "
     "cone). Relations: on, left of, right of, in front of, behind, next to; left and right are as the visitor sees "
-    "the table. Targets and object names must be exactly as listed. Example: [happy] [[place red sphere on box]] "
-    "Done, the red ball is sitting on the box. Never read the tags aloud. Objects on the table now: ")
+    "the table. Targets and object names must be exactly as listed; if the visitor asks for an object that isn't "
+    "there yet, create it. Example: [happy] [[place red sphere on box]] "
+    "Done, the red ball is sitting on the box. Anything that is not a plain cube, sphere, cylinder or cone (an "
+    "animal, a character, a vehicle, a tree, a house, a game prop) must be built from parts, never stood in for by a "
+    "single shape and with no place tag for it: one build tag at the END of your reply, after what you say: "
+    "[[build <name> <relation> <target>: <color> <shape> x y z w d h; <color> <shape> x y z w d h; ...]]. Units are "
+    "cm: x to the visitor's right, y toward the visitor, z up from the table; x y z is the center of the part, w d h "
+    "its size along x y z. Use 5 to 20 parts that touch, keep it within 60 by 40 by 50 cm, and make the biggest part "
+    "the body. Example: [[build small dog on table: brown cube 0 0 14 26 11 11; brown cube 16 0 22 10 10 10; black "
+    "sphere 22 0 21 3 3 3; brown cube 13 -5 29 3 2 6; brown cube 13 5 29 3 2 6; brown cylinder 9 -4 4 4 4 9; brown "
+    "cylinder 9 4 4 4 4 9; brown cylinder -9 -4 4 4 4 9; brown cylinder -9 4 4 4 4 9; brown cylinder -15 0 20 2.5 2.5 "
+    "10]]. A built object is then listed by its name and can be moved or removed like any other object. Never read "
+    "the tags aloud. Objects on the table now: ")
 _log_file = None
 
 
@@ -797,7 +812,7 @@ def main():
                         "19-26 deg at the neck from the idle, so every reply leaned in and swung back")
     p.add_argument("--no-workspace", dest="workspace", action="store_false",
                    help="no table / [[place ...]] actions (needs the two-pane viewport layout, see workspace.py)")
-    p.add_argument("--greeting", default="[happy] Hi! I'm your digital human. Say something and I'll answer.")
+    p.add_argument("--greeting", default="[happy] Hi, I'm Vivian, your game designer for today's hackathon. What shall we make?")
     args = p.parse_args()
     GAZE.update(camera=args.camera, pitch_fix=args.gaze_pitch_fix)
     for k in ("GRADIUM_API_KEY", "GEMINI_API_KEY"):
