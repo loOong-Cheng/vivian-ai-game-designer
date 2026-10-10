@@ -11,6 +11,7 @@ Milestone 1B: make a default MetaHuman lip-sync to external speech audio using E
 | `mood_test.md` | Mood/intensity tests and the emotion receiver component plan |
 | `unreal_mcp_notes.md` | MCP status; Python/manual fallback |
 | `test_results.md` | Log, acceptance criteria, measurements |
+| **`WINDOWS_HANDOFF.md`** | **Start here on the Windows PC**: verified APIs, gotchas, setup and steps |
 
 ## Layout
 
