@@ -7,6 +7,7 @@ Run inside the editor (PyJobs, or the voice bridge's [[...]] actions):
   workspace.do("place blue cube left of red sphere") # relations: on, left of, right of, in front of, behind, next to
   workspace.do("remove red sphere"); workspace.do("clear")
   workspace.do("build small dog on table: brown cube 0 0 14 24 10 10; brown cube 14 0 22 9 9 9; ...")  # see build()
+  workspace.do("place treasure chest left of box")    # game-ready asset from ASSETS
 Left/right/front/behind are from CAM_Workspace's point of view, i.e. the visitor's.
 Every call returns "<what happened> | scene: name, name, ...".
 """
@@ -36,6 +37,13 @@ STAGE = ORIGIN + unreal.Vector(0, 0, -1000)  # new objects are spawned here, the
 MAX_PARTS = 30
 FIT = (60.0, 40.0, 50.0)  # largest built object, cm along right / toward the viewer / up (table top is 140 x 90)
 PART_RE = re.compile(r"([a-z]+)\s+([a-z]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)")
+# Game-ready props: name -> (folder of its static meshes, scale). The treasure chest is Poly Haven's "Treasure Chest"
+# (CC0, Rico Cilliers; 2k glTF, PBR textures), imported with Interchange into these 5 part meshes (bottom, lid, handles,
+# lock) that share one origin, so the parts are spawned at one point and grouped like a built object. 96 x 52 x 62 cm
+# in reality, 0.4 = 38 x 21 x 25 cm on the table. Its front (lock) is mesh +Y.
+ASSETS = {"treasure chest": ("/Game/Workspace/Assets/TreasureChest/treasure_chest_2k/StaticMeshes", 0.4)}
+ASSET_ALIAS = {"chest": "treasure chest", "treasure": "treasure chest", "treasure box": "treasure chest",
+               "pirate chest": "treasure chest"}
 SAY = {"on": "on", "left": "left of", "right": "right of", "front": "in front of", "behind": "behind", "next": "next to"}
 EAS = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
@@ -227,7 +235,7 @@ def _place(mover, rel, target_name):
                 break
         loc = loc or unreal.Vector(t_o.x, t_o.y, top + h.z)
     elif rel == "on":
-        if len(_group(target)) > 1:  # built object: sit on its main (largest) part, not on the ear tips
+        if len(_group(target)) > 1 and "asset" not in [str(t) for t in target.tags]:  # built: on its main part, not the ear tips
             o, e = target.get_actor_bounds(False)
         loc = unreal.Vector(o.x, o.y, o.z + e.z + h.z)
     else:
@@ -245,6 +253,39 @@ def _place(mover, rel, target_name):
         loc = _nearest_free(loc, h, [mover], t_o, t_e, top) or loc
     mover.set_actor_location(mover.get_actor_location() + (loc - m_o), False, False)
     return True, f"{SAY[rel]} {target.get_actor_label()}"
+
+
+def import_gltf(path, dest="/Game/Workspace/Assets/TreasureChest"):
+    """One-time import of a downloaded glTF (e.g. Poly Haven's treasure_chest_2k.gltf with its .bin and textures/)."""
+    t = unreal.AssetImportTask()
+    for k, v in (("filename", path), ("destination_path", dest), ("automated", True), ("save", True),
+                 ("replace_existing", True)):
+        t.set_editor_property(k, v)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([t])
+    return list(t.get_editor_property("imported_object_paths"))
+
+
+def _spawn_asset(name):
+    """Spawn a game-ready prop from ASSETS at STAGE, facing the visitor; parts attached to the largest one."""
+    folder, scale = ASSETS[name]
+    meshes = [unreal.load_asset(p) for p in unreal.EditorAssetLibrary.list_assets(folder, False, False)]
+    meshes = [m for m in meshes if isinstance(m, unreal.StaticMesh)]
+    vol = lambda m: m.get_bounds().box_extent.x * m.get_bounds().box_extent.y * m.get_bounds().box_extent.z
+    meshes.sort(key=vol, reverse=True)
+    _, toward = _axes()
+    yaw = math.degrees(math.atan2(-toward.x, toward.y))  # mesh +Y (the front) toward the viewer
+    label = _label(name)
+    actors = []
+    for i, m in enumerate(meshes):
+        a = EAS.spawn_actor_from_object(m, STAGE, unreal.Rotator(0, 0, yaw))
+        a.set_actor_label(label if i == 0 else f"{label} {m.get_name().replace('treasure_chest_', '')}")
+        a.set_actor_scale3d(unreal.Vector(scale, scale, scale))
+        a.tags = [TAG, "asset"] if i == 0 else [PART]
+        actors.append(a)
+    for a in actors[1:]:
+        a.attach_to_actor(actors[0], "", unreal.AttachmentRule.KEEP_WORLD, unreal.AttachmentRule.KEEP_WORLD,
+                          unreal.AttachmentRule.KEEP_WORLD, False)
+    return actors[0]
 
 
 def build(spec):
@@ -320,7 +361,14 @@ def do(command):
             what, target = [s.strip() for s in f" {body} ".split(f" {rel[0]} ", 1)]
             what = re.sub(r"^(the|a|an)\s+", "", what)
             existing = _find(what)
-            if existing:
+            asset = ASSET_ALIAS.get(what, what)
+            if not existing and asset in ASSETS:
+                a = _spawn_asset(asset)
+                ok, where = _place(a, rel[1], target)
+                if not ok:
+                    _destroy(a)
+                result = f"placed {a.get_actor_label()} {where}" if ok else where
+            elif existing:
                 ok, where = _place(existing, rel[1], target)
                 result = f"moved {existing.get_actor_label()} {where}" if ok else where
             else:

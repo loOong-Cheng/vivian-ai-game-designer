@@ -78,7 +78,9 @@ WORKSPACE_PROMPT = (
     "the body. Example: [[build small dog on table: brown cube 0 0 14 26 11 11; brown cube 16 0 22 10 10 10; black "
     "sphere 22 0 21 3 3 3; brown cube 13 -5 29 3 2 6; brown cube 13 5 29 3 2 6; brown cylinder 9 -4 4 4 4 9; brown "
     "cylinder 9 4 4 4 4 9; brown cylinder -9 -4 4 4 4 9; brown cylinder -9 4 4 4 4 9; brown cylinder -15 0 20 2.5 2.5 "
-    "10]]. A built object is then listed by its name and can be moved or removed like any other object. Never read "
+    "10]]. A built object is then listed by its name and can be moved or removed like any other object. You also "
+    "have one ready-made, game-ready asset, a photoscanned treasure chest: [[place treasure chest <relation> "
+    "<target>]]; use it whenever someone asks for a chest or treasure, and don't build one. Never read "
     "the tags aloud. Objects on the table now: ")
 _log_file = None
 
