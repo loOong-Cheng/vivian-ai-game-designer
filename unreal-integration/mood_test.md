@@ -28,6 +28,14 @@ The plan is a small actor component `BPC_EmotionReceiver` with:
 - **Action:** get the Live Link subject's settings object and set the mood and intensity, using only setter nodes and property names that the API dump shows to exist.
 - **Transport (later):** a small listener the Python bridge can reach, such as a Remote Control HTTP call or a TCP/UDP plugin. The choice is deferred, and the Claude API isn't part of this phase.
 
-## Results
+## Results (Windows, 2026-10-10) [measured]
 
-_pending_
+`SetMood` / `SetMoodIntensity` **do exist** and work from Python: `MetaHumanLocalLiveLinkSourceBlueprint.get_subject_settings(key)` returns `MetaHumanAudioLiveLinkSubjectSettings`. Same speech (clip1 + clip2) per mood, intensity 1.0, curves logged every frame by `scripts/ue/record_curves.py`:
+
+| Mood | `mouthCornerPullL` mean / max | jawOpen max | Lag |
+|---|---|---|---|
+| Neutral | 0.012 / 0.043 | 0.559 | 260 ms |
+| Happiness | **0.349 / 0.654** | 0.618 | 260 ms |
+| Sadness | 0.036 / 0.107 | 0.585 | 255 ms |
+
+Lip motion carried on under every mood (the curve changed every frame, no freezes). The mood was switched between utterances, not mid-utterance; the blend time for a mid-speech switch hasn't been measured yet. The voice bridge (`dt/bridge/avatar_chat.py`) applies a mood per reply from Gemini's tag ([happy], [sad], [excited], …) at intensity 0.8. With `[excited]` the smile curve rose to 0.10–0.28 during the reply.

@@ -19,9 +19,16 @@ Milestone 1B: make a default MetaHuman lip-sync to external speech audio using E
 unreal-integration/
 ├── scripts/
 │   ├── make_test_wavs.sh             # 3 speech clips, 48 kHz mono WAV (macOS `say`)
-│   ├── play_to_device.py             # play WAVs to a named CoreAudio device (e.g. BlackHole 2ch)
-│   ├── create_project.sh             # Blueprint-only UE 5.8 project with verified plugin list
-│   └── ue/introspect_metahuman_api.py  # dumps the installed MetaHuman/Live Link Python API
+│   ├── play_to_device.py             # play WAVs to a named device (BlackHole 2ch / CABLE Input via WASAPI)
+│   ├── lipsync_latency.py            # plays clips, logs face curves per frame: audio->jaw lag, FPS, continuity
+│   ├── create_project.sh             # Blueprint-only UE 5.8 project with verified plugins + SM6 settings
+│   ├── launch_editor.sh / .ps1       # open the project with the Unreal MCP server on :8000
+│   ├── ue_exec.py, mcp_call.py       # run Python in the editor (PyJobs) / call MCP tools
+│   └── ue/
+│       ├── init_unreal.py            # PyJobs runner (re-entrancy safe)
+│       ├── record_curves.py          # per-frame curve recorder used by lipsync_latency.py
+│       ├── mh_audio_livelink.py      # Live Link audio source + mood helpers
+│       └── introspect_metahuman_api.py  # dumps the installed MetaHuman/Live Link Python API
 ├── test_audio/                       # generated clips
 └── .venv/                            # sounddevice, soundfile, numpy (gitignored)
 ```

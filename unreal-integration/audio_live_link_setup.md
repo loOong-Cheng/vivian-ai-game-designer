@@ -55,7 +55,9 @@ Binding to the MetaHuman is covered in `metahuman_setup.md`.
 | Silence | Send real silence (zeros) between utterances rather than closing the stream. Unreal keeps the device open regardless. |
 | Reference impl | `scripts/play_to_device.py` (uses `sounddevice`) |
 
-The bridge doesn't talk to Unreal directly. The only coupling is the audio device. Emotion events (Phase 4) will go through a separate channel; see `mood_test.md`.
+**On Windows** [measured 2026-10-10]: the output device is **"CABLE Input (VB-Audio Virtual Cable)" opened through WASAPI** (shared mode, 48 kHz). Unreal listens on "CABLE Output", where the only format offered is IEEE Float 2 ch @ 48000 Hz. Writing through MME instead (sounddevice's first name match) made audio → jaw 465 ms instead of 270 ms. The implementation is `dt/bridge/avatar_chat.py`, which also sends a copy to the headset delayed by 270 ms so voice and lips line up.
+
+The bridge doesn't talk to Unreal directly for audio. The only coupling is the audio device. Emotion events (Phase 4) will go through a separate channel; see `mood_test.md`.
 
 ## 5. Test commands
 

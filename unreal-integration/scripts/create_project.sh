@@ -44,10 +44,29 @@ mkdir -p "$PROJ_DIR/Content" "$PROJ_DIR/Config"
 } > "$UPROJECT"
 
 # Python startup path so repo scripts are importable from the editor console.
+# Renderer + SM6 settings come from Epic's TP_BlankBP template plus the three settings the
+# MetaHuman editor asks for. Without SM6 the MetaHuman skin bake fails to compile
+# ("maximum ps_5_0 sampler register index (16) exceeded") and the head texture comes out grey.
 cat > "$PROJ_DIR/Config/DefaultEngine.ini" <<EOF
 [/Script/PythonScriptPlugin.PythonScriptPluginSettings]
 +AdditionalPaths=(Path="$(cd "$(dirname "$0")" && pwd)/ue")
 bDeveloperMode=True
+
+[/Script/Engine.RendererSettings]
+r.GPUSkin.Support16BitBoneIndex=True
+r.GPUSkin.UnlimitedBoneInfluences=True
+r.SkinCache.CompileShaders=True
+r.AllowStaticLighting=False
+r.Shadow.Virtual.Enable=1
+
+[/Script/WindowsTargetPlatform.WindowsTargetSettings]
+DefaultGraphicsRHI=DefaultGraphicsRHI_DX12
+-D3D12TargetedShaderFormats=PCD3D_SM5
++D3D12TargetedShaderFormats=PCD3D_SM6
+
+[/Script/MacTargetPlatform.MacTargetSettings]
+-TargetedRHIs=SF_METAL_SM5
++TargetedRHIs=SF_METAL_SM6
 EOF
 
 echo "Created $UPROJECT with plugins: ${ENABLED[*]}"

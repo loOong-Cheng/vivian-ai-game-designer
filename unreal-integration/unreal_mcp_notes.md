@@ -30,4 +30,13 @@ Source: [Unreal MCP in Unreal Editor](https://dev.epicgames.com/documentation/un
 
 ## Results
 
-_pending engine install: record the plugin's presence, the real `.uplugin` names, the toolset list from `list_toolsets`, and whether it runs on macOS 26._
+- **macOS 26 / Windows 11:** the server runs on both. On Windows it was up 7–74 s after launch with **53 toolsets** (5.8.3).
+- **Call shape:** `call_tool {"toolset_name": "...", "tool_name": "...", "arguments": {...}}` and `describe_toolset {"toolset_name": "..."}`.
+- **Most useful toolsets so far:**
+  - `metahuman_toolset.metahuman.MetaHumanToolset` (create, edit sessions)
+  - `EditorToolset.EditorAppToolset` (`OpenEditorForAsset`, `CaptureViewport`, which needs an explicit `captureTransform`, `CaptureEditorImage`, `CaptureAssetImage`)
+  - `editor_toolset.toolsets.blueprint.BlueprintTools` (`list_variables`, `read_graph_dsl`)
+  - `editor_toolset.toolsets.object.ObjectTools` (`get_properties`)
+  - **`SlateInspectorToolset`**, Playwright-style UI automation: `Windows`, `Observe`, `Snapshot`, `Click`, `Type`, `Hover`. It drove the Live Link "+ Add → MetaHuman (Audio) → Connect" flow and the project-settings prompt, so the "UI-only" steps are scriptable.
+- **Images:** `mcp_call.py` saves base64 images in results to `$MCP_IMAGE_DIR` (default `%TEMP%\unreal_mcp`) and prints the path.
+- **Windows quoting:** Windows PowerShell 5.1 strips JSON quotes in native-exe arguments; pass JSON through stdin (`-`) or `@file`.

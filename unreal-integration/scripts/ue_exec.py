@@ -25,7 +25,7 @@ def main():
     p.add_argument("--timeout", type=float, default=120.0)
     a = p.parse_args()
     if a.file:
-        code = open(a.file).read()
+        code = open(a.file, encoding="utf-8").read()
     elif a.command:
         code = a.command
     else:
@@ -35,7 +35,7 @@ def main():
 
     name = f"{time.strftime('%H%M%S')}_{uuid.uuid4().hex[:6]}"
     tmp = os.path.join(JOB_DIR, name + ".tmp")
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write(code)
     os.replace(tmp, os.path.join(JOB_DIR, name + ".py"))
 
@@ -45,7 +45,7 @@ def main():
         if time.time() - t0 > a.timeout:
             sys.exit(f"Timed out after {a.timeout}s (editor busy or runner not loaded)")
         time.sleep(0.1)
-    text = open(out).read()
+    text = open(out, encoding="utf-8").read()
     os.remove(out)
     status, _, body = text.partition("\n")
     print(body, end="")
