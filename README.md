@@ -8,9 +8,9 @@ Vivian is a realistic digital human, built in Unreal Engine 5.8 with MetaHuman d
 
 ## What she can do
 
-- **Talk:** speak a question, and she answers in about 2.3 seconds with a natural voice.
+- **Talk:** speak a question, and she answers out loud, quick and responsive, with a natural voice.
 - **Show feelings:** every reply has a mood (happy, sad, surprised, excited, playful, confused, confident or neutral) that shows on her face. She blinks, nods while she talks, and looks into the camera now and then.
-- **Build on a table:** "put a red ball on the box", "build a small dog in front of the plate", "put a treasure chest right of the box". Objects appear in about 0.2 seconds.
+- **Build on a table:** "put a red ball on the box", "build a small dog in front of the plate", "put a treasure chest right of the box". Objects appear right away.
 - **Work with a human in the loop:** if one of her designs is off (say, a car whose wheels stand upright), you fix it by hand in Unreal and keep talking to her; built objects are real, connected parts, so your fix moves with them.
 
 ## How it works
@@ -20,7 +20,7 @@ You (mic) ─► Ears: Gradium speech-to-text (streaming, end-of-turn detection)
           ─► Brain: Google Gemini Flash-Lite (streaming reply + [mood] tag + [[action]] tags)
           ─► Voice: Gradium text-to-speech (48 kHz)
           ─► VB-Audio Virtual Cable ─► Unreal MetaHuman Audio Live Link ─► lip-sync on Vivian's face
-                                       (your headset gets the same voice, delayed to match her lips)
+                                       (the voice you hear is delayed to match her lips)
 
 [happy]                      ─► Python inside Unreal ─► her facial mood
 [[place red sphere on box]]  ─► Python inside Unreal ─► the table changes (the tags are never spoken)
@@ -45,7 +45,7 @@ The Python bridge (`bridge/avatar_chat.py`) runs the whole loop and streams ever
 | 3D asset | Poly Haven "Treasure Chest" (CC0) | A game-ready, photoscanned prop |
 | Coding partner | Claude Code | Wrote, tested and debugged the code with us |
 
-## Measured latency
+## Measured latency (technical details)
 
 All numbers were measured during the hackathon on one Windows PC (i9-12900KF, RTX 3080 Ti). Details: [`unreal-integration/test_results.md`](unreal-integration/test_results.md).
 
@@ -54,11 +54,11 @@ All numbers were measured during the hackathon on one Windows PC (i9-12900KF, RT
 | End of your sentence → you hear her (median, 3 questions × 2 runs) | **2.26 s** (2.62 s before streaming) |
 | End of your sentence → written reply, Gemini Flash-Lite vs Flash | **1.3 s** vs 3.3 s |
 | Written sentence → her voice starts | ~0.1 s |
-| Sound → her lips move (the headset voice is delayed to match) | 0.5–0.65 s |
+| Sound → her lips move (the voice you hear is delayed to match) | 0.5–0.65 s |
 | A place or build command on the table | 0.16–0.36 s |
 | Editor frame rate while she talks | 86–115 fps |
 
-One real turn, from the moment you stop talking: end of turn detected 0.64 s, text ready 0.95 s, reply starts 1.51 s, voice ready 1.66 s, sent to her face 1.74 s, heard in the headset 2.24 s.
+One real turn, from the moment you stop talking: end of turn detected 0.64 s, text ready 0.95 s, reply starts 1.51 s, voice ready 1.66 s, sent to her face 1.74 s, you hear her 2.24 s.
 
 ## Challenges and fixes
 
@@ -68,7 +68,7 @@ One real turn, from the moment you stop talking: end of turn detected 0.64 s, te
 | Her skin came out grey | Turned on Shader Model 6 and rebuilt her |
 | The editor crashed when our script runner re-entered a long job | One job at a time (a busy lock) |
 | Her lips only opened and closed | 240 ms solver look-ahead + a captured "calm face" (lip closures 0.47 → 0.89) |
-| Her voice came before her lips | Measured the face delay and delay the headset by the same amount |
+| Her voice came before her lips | Measured the face delay and hold back the voice you hear by the same amount |
 | Slow answers | Stream sentence by sentence into the voice (2.62 → 2.26 s) |
 | Faster end-of-turn settings cut people off mid-question | Kept the safe setting |
 | Her body jumped with every mood change | The body stays calm; only her face shows emotion |
@@ -83,7 +83,7 @@ One real turn, from the moment you stop talking: end of turn detected 0.64 s, te
 
 ## Running it
 
-You need Windows, Unreal Engine 5.8 with the MetaHuman plugins, VB-Audio Virtual Cable, Python 3.13, a headset, and API keys for [Gradium](https://gradium.ai) and Google Gemini.
+You need Windows, Unreal Engine 5.8 with the MetaHuman plugins, VB-Audio Virtual Cable, Python 3.13, a microphone, and API keys for [Gradium](https://gradium.ai) and Google Gemini.
 
 1. Set up the Unreal project, Vivian and the Audio Live Link source as described in [`unreal-integration/WINDOWS_HANDOFF.md`](unreal-integration/WINDOWS_HANDOFF.md).
 2. Copy `.env.example` to `.env` and fill in `GRADIUM_API_KEY` and `GEMINI_API_KEY`.
