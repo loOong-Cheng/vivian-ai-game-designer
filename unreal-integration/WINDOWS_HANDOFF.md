@@ -111,6 +111,22 @@ Install **VB-Audio Virtual Cable** (free, vb-audio.com), then reboot or replug.
 
 Tell your teammate: on Windows the bridge plays to **"CABLE Input"**. On the Mac it's **"BlackHole 2ch"**. Everything else in the contract (48 kHz, 2 ch) is the same.
 
+### 5. Live mic from the Mac on site (over the VPN)
+
+Don't use the remote-desktop mic: it's compressed and its delay varies. Stream raw PCM over UDP instead:
+
+```powershell
+# PC: plays whatever arrives into CABLE Input, and silence otherwise (stream never closes)
+.venv\Scripts\python scripts\audio_recv.py            # UDP 50555; allow python through Windows Firewall (Private)
+```
+```bash
+# Mac: default mic -> PC (use the PC's VPN/LAN IP)
+.venv/bin/python scripts/audio_send.py --host <PC_IP>
+.venv/bin/python scripts/audio_send.py --host <PC_IP> --wav test_audio/clip1.wav   # network test without a mic
+```
+
+The format is 48 kHz int16 mono in 10 ms packets, with a 40 ms jitter buffer (`--prefill`) and latency capped at 150 ms (`--max-buffer`). The receiver prints `rx/lost/late/underruns/buffer` every 5 s. On the Mac over loopback into BlackHole, a sent WAV came back bit-exact (correlation 1.000, 477/477 packets, 0 lost) [measured]. VPN latency has not been measured yet. Measure lip lag from a screen recording made **on the PC**, not through the remote viewer.
+
 ## Step-by-step on Windows
 
 1. **MetaHuman:** create `/Game/MH/MHC_Default`. You can use MCP: `python scripts\mcp_call.py call_tool "{\"toolset_name\":\"metahuman_toolset.metahuman.MetaHumanToolset\",\"tool_name\":\"create\",\"arguments\":{\"asset_path\":\"/Game/MH/MHC_Default\"}}"`, or the Content Browser right-click menu. Open it in **MetaHuman Creator** (the UI), pick a preset, then request textures and the **auto-rig**. Prefer **Joints and Blend Shapes** for better lip-sync; JointsOnly is lighter.
