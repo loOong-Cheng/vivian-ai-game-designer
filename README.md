@@ -2,7 +2,7 @@
 
 Vivian is a realistic digital human, built in Unreal Engine 5.8 with MetaHuman during a one-day hackathon (10 October 2026). You talk to her through a microphone, and she answers out loud with lip-synced speech and facial expressions. She can also prototype game ideas on a 3D table next to her: placing shapes, building objects out of blocks, and bringing in a game-ready treasure chest.
 
-**Demo video:** _add the link here_
+**Demo video:** _add the link here_ · **Slides:** [docs/Vivian_slides.pdf](docs/Vivian_slides.pdf)
 
 ![Vivian on top, her design table below](docs/split_screen.png)
 
