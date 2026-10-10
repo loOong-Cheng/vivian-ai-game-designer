@@ -59,6 +59,11 @@ r.SkinCache.CompileShaders=True
 r.AllowStaticLighting=False
 r.Shadow.Virtual.Enable=1
 
+[SystemSettings]
+; hair shadow on skin: 0.1 cm voxels (0.3 cm showed stair steps), supersampled deep shadows
+r.HairStrands.Voxelization.Virtual.VoxelWorldSize=0.1
+r.HairStrands.DeepShadow.SuperSampling=1
+
 [/Script/WindowsTargetPlatform.WindowsTargetSettings]
 DefaultGraphicsRHI=DefaultGraphicsRHI_DX12
 -D3D12TargetedShaderFormats=PCD3D_SM5

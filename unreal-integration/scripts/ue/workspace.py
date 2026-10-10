@@ -101,13 +101,29 @@ def split_screen(face="CAM_Face"):
     cams = {a.get_actor_label(): a for a in EAS.get_all_level_actors()}
     les.pilot_level_actor(cams[face], keys[0])
     les.pilot_level_actor(_camera(), keys[1])
-    # Each pane picks the MetaHuman LOD from its own camera (close: LOD 0, strand hair; far: LOD 2, card hair), so
-    # with two panes the hair swapped strands <-> cards every frame and flickered. Pin LOD 0.
+    render_fixes()
+    return f"{face} -> {keys[0]}, CAM_Workspace -> {keys[1]}"
+
+
+def render_fixes():
+    """Hair look for the close-up (measured on 2x zooms of the face pane):
+    - Each pane picks the MetaHuman LOD from its own camera (close: LOD 0, strand hair; far: LOD 2, card hair), so
+      with two panes the hair swapped strands <-> cards every frame and flickered. Pin LOD 0.
+    - The hair's shadow on the skin had 0.3 cm stair steps = the hair voxel size: voxels 0.1 cm, deep shadows on the
+      sun (supersampled), sun angle 1 deg for a softer edge.
+    - Peach fuzz drew a dotted bright/dark line along the jaw silhouette: hidden."""
+    for cmd in ("r.HairStrands.Voxelization.Virtual.VoxelWorldSize 0.1", "r.HairStrands.DeepShadow.SuperSampling 1"):
+        unreal.SystemLibrary.execute_console_command(None, cmd)
     for a in EAS.get_all_level_actors():
         sync = a.get_component_by_class(unreal.LODSyncComponent)
         if sync:
             sync.set_editor_property("forced_lod", 0)
-    return f"{face} -> {keys[0]}, CAM_Workspace -> {keys[1]}"
+            for g in a.get_components_by_class(unreal.GroomComponent):
+                if g.get_name() == "Fuzz":
+                    g.set_visibility(False)
+        if isinstance(a, unreal.DirectionalLight):
+            a.light_component.set_editor_property("cast_deep_shadow", True)
+            a.light_component.set_editor_property("light_source_angle", 1.0)
 
 
 def scene():
