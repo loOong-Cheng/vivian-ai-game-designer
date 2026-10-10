@@ -22,6 +22,7 @@ import base64
 import collections
 import json
 import os
+import queue
 import re
 import socket
 import struct
@@ -53,6 +54,17 @@ SYSTEM = ("You are a warm, expressive digital human, shown as a MetaHuman at a h
           "reply with exactly one mood tag from " + ", ".join(f"[{m}]" for m in MOODS) + ". Your face shows this "
           "mood, so pick the one that fits what you say and how you feel about it; show emotion freely and use "
           "[neutral] only for plain facts.")
+# Table the avatar arranges objects on (unreal-integration/scripts/ue/workspace.py, lower half of the split screen).
+WORKSPACE = {"on": False, "scene": []}
+WORKSPACE_PROMPT = (
+    " A table is shown on screen below you; you can arrange objects on it. When the visitor asks you to put, move or "
+    "remove something, add one action tag per step right after your mood tag, then say briefly what you did. Tags: "
+    "[[place <color> <shape> <relation> <target>]] to add a new object, [[place <object name> <relation> <target>]] to "
+    "move one that is already there, [[remove <object name>]], [[clear]]. Colors: red, green, blue, yellow, white, "
+    "black, orange, purple, pink, brown, grey. Shapes: cube, sphere, cylinder, cone (a ball is a sphere, a pyramid a "
+    "cone). Relations: on, left of, right of, in front of, behind, next to; left and right are as the visitor sees "
+    "the table. Targets and object names must be exactly as listed. Example: [happy] [[place red sphere on box]] "
+    "Done, the red ball is sitting on the box. Never read the tags aloud. Objects on the table now: ")
 _log_file = None
 
 
@@ -286,8 +298,14 @@ async def stt_loop(args, env, mic_q, turns, state):
         await asyncio.gather(send(), receive())
 
 
+def system_prompt():
+    if not WORKSPACE["on"]:
+        return SYSTEM
+    return SYSTEM + WORKSPACE_PROMPT + (", ".join(WORKSPACE["scene"]) or "nothing") + "."
+
+
 def gemini(env, model, history, thinking):
-    body = {"systemInstruction": {"parts": [{"text": SYSTEM}]}, "contents": history}
+    body = {"systemInstruction": {"parts": [{"text": system_prompt()}]}, "contents": history}
     if thinking:
         body["generationConfig"] = {"thinkingConfig": {"thinkingLevel": thinking}}
     req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -306,7 +324,7 @@ def gemini(env, model, history, thinking):
 
 def gemini_stream(env, model, history, thinking, loop, q):
     """Thread: stream the reply (SSE) and put text deltas on the asyncio queue q, then None."""
-    body = {"systemInstruction": {"parts": [{"text": SYSTEM}]}, "contents": history}
+    body = {"systemInstruction": {"parts": [{"text": system_prompt()}]}, "contents": history}
     if thinking:
         body["generationConfig"] = {"thinkingConfig": {"thinkingLevel": thinking}}
     req = urllib.request.Request(
@@ -363,6 +381,49 @@ def pop_chunks(buf, final=False, first=False):
     return [c for c in out if c], buf
 
 
+def take_actions(buf):
+    """Pull complete [[action]] tags out of streamed text. Returns (actions, (text for TTS, text held back because
+    an action tag may still be arriving))."""
+    acts = [a.strip() for a in re.findall(r"\[\[(.+?)\]\]", buf)]
+    buf = re.sub(r"\s*\[\[.+?\]\]", "", buf)
+    i = buf.find("[[")
+    if i < 0 and buf.endswith("["):
+        i = len(buf) - 1
+    return acts, ((buf, "") if i < 0 else (buf[:i], buf[i:]))
+
+
+_actions = queue.Queue()
+
+
+def action_worker():
+    """Thread: run [[...]] actions in the editor one at a time, in order (workspace.do), and track the scene."""
+    while True:
+        act = _actions.get()
+        t0 = time.perf_counter()
+        ok, out = ue(f"import workspace\nprint(workspace.do({act!r}))", timeout=10)
+        line = out.splitlines()[-1] if out else ""
+        if ok and " | scene: " in line:
+            result, scene = line.split(" | scene: ", 1)
+            WORKSPACE["scene"] = [x for x in scene.split(", ") if x]
+            log(f"  action [[{act}]] -> {result} ({(time.perf_counter() - t0) * 1000:.0f} ms)")
+        else:
+            log(f"  action [[{act}]] FAILED: {out[-300:]}")
+
+
+def setup_workspace(args):
+    """Table scene + split-screen cameras. Returns False if the editor or workspace.py isn't reachable."""
+    ok, out = ue("import importlib, workspace\nimportlib.reload(workspace)\nprint(', '.join(workspace.setup()))\n"
+                 f"print(workspace.split_screen({args.camera!r}))", timeout=20)
+    if not ok:
+        log(f"warning: workspace disabled ({out[-300:]})")
+        return False
+    lines = out.splitlines()
+    WORKSPACE["scene"] = [x for x in lines[-2].split(", ") if x]
+    log(f"workspace: {', '.join(WORKSPACE['scene'])} | {lines[-1]}")
+    threading.Thread(target=action_worker, daemon=True).start()
+    return True
+
+
 def parse_mood(reply):
     m = re.match(r"\s*\[(\w+)\]\s*", reply)
     mood = m.group(1).lower() if m else "neutral"
@@ -372,7 +433,9 @@ def parse_mood(reply):
 
 def ue(code, timeout=10):
     """Run Python in the editor (PyJobs). Returns (ok, output)."""
-    r = subprocess.run([sys.executable, UE_EXEC, "--timeout", str(timeout), "-c", code], capture_output=True, text=True)
+    # stdin=DEVNULL: on Windows, starting a process that inherits stdin blocks while text mode's input() is reading it
+    r = subprocess.run([sys.executable, UE_EXEC, "--timeout", str(timeout), "-c", code], capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL)
     return r.returncode == 0, (r.stdout + r.stderr).strip()
 
 
@@ -414,8 +477,27 @@ def set_mood(subject, mood, intensity, actor="", body=0):
     log(f"  mood -> {mood} ({intensity}, body loop {body}): {'ok' if ok else 'FAILED ' + out[-200:]}")
 
 
+def restart_live_link(args):
+    """Re-apply the Live Link preset, which recreates the audio source. Its solver once stopped mid-session (jaw curve
+    frozen at one value, nothing in the editor log) and only a restart of the source brought it back."""
+    if not args.preset:
+        return
+    ok, out = ue(f"import unreal\nprint(unreal.load_asset({args.preset!r}).apply_to_client())")
+    if not ok:
+        log(f"warning: couldn't re-apply Live Link preset {args.preset}: {out[-200:]}")
+        return
+    for _ in range(25):  # the subject comes back within a second or two
+        if ue(subject_code(args.subject) + "print('ok')", timeout=5)[0]:
+            log(f"Live Link audio source restarted ({args.preset})")
+            time.sleep(3.0)  # let the solver settle: a neutral frame taken after 1 s left the jaw at ~1/3 range
+            return
+        time.sleep(0.2)
+    log(f"warning: subject {args.subject} didn't come back after re-applying {args.preset}")
+
+
 def tune_unreal(args):
     """Lookahead + neutral-frame calibration on the audio subject. Returns False if the editor isn't reachable."""
+    restart_live_link(args)
     ok, out = ue(subject_code(args.subject) + f"s.set_lookahead({args.lookahead}); "
                  "s.set_mood(unreal.AudioDrivenAnimationMood.NEUTRAL); s.set_mood_intensity(1.0); print('lookahead', s.get_lookahead())")
     if not ok:
@@ -538,6 +620,9 @@ async def converse(args, env, turns, cable, headset, state):
                     reply = await asyncio.to_thread(gemini, env, args.model, history, args.thinking)
                     marks["text"] = time.perf_counter()
                     history.append({"role": "model", "parts": [{"text": reply}]})
+                acts, (reply, _) = take_actions(reply)
+                for a in acts:
+                    _actions.put(a)
                 mood, text = parse_mood(reply)
                 log(f"Avatar [{mood}]: {text}")
                 apply_mood(mood)
@@ -556,15 +641,23 @@ async def converse(args, env, turns, cable, headset, state):
                     mood = m.group(1).lower() if m and m.group(1).lower() in MOODS else "neutral"
                     buf = buf[m.end():] if m else buf
                     apply_mood(mood)
-                chunks, buf = pop_chunks(buf, first=first)
+                acts, (ready, held) = take_actions(buf)
+                for a in acts:  # runs in the editor while she talks
+                    marks.setdefault("action", time.perf_counter())
+                    _actions.put(a)
+                chunks, buf = pop_chunks(ready, first=first)
+                buf += held
                 first = first and not chunks
                 for c in chunks:
                     yield re.sub(r"\[\w+\]", "", c).replace("*", "").strip()
+            for a in take_actions(buf + "]]" if "[[" in buf else buf)[0]:  # unterminated tag at the very end
+                _actions.put(a)
+            buf = re.sub(r"\[\[.*", "", re.sub(r"\s*\[\[.+?\]\]", "", buf))
             for c in pop_chunks(buf, final=True)[0]:
                 yield re.sub(r"\[\w+\]", "", c).replace("*", "").strip()
             marks["text_done"] = time.perf_counter()
             history.append({"role": "model", "parts": [{"text": full}]})
-            log(f"Avatar [{mood}]: {parse_mood(full)[1]}")
+            log(f"Avatar [{mood}]: {re.sub(r'^\s*\[\w+\]\s*', '', full).strip()}")  # action tags shown as sent
 
         if not scripted:
             history.append({"role": "user", "parts": [{"text": user}]})
@@ -602,7 +695,12 @@ async def converse(args, env, turns, cable, headset, state):
 
 async def text_input(turns, state):
     while True:
-        line = (await asyncio.to_thread(input, "> ")).strip()
+        try:
+            line = (await asyncio.to_thread(input, "> ")).strip()
+        except EOFError:  # piped input ended: finish the last reply, then exit
+            while not (state.listening and turns.empty()):
+                await asyncio.sleep(0.2)
+            return
         if line:
             state.listening = False
             await turns.put(line)
@@ -611,6 +709,7 @@ async def text_input(turns, state):
 async def run(args, env):
     loop = asyncio.get_running_loop()
     moods = args.moods and await asyncio.to_thread(tune_unreal, args)
+    WORKSPACE["on"] = args.workspace and await asyncio.to_thread(setup_workspace, args)
     state = types.SimpleNamespace(listening=False, turn_end=None, transcript_at=None, last_voice=None, moods=moods)
     cable = Player(find_device(args.cable, "output"))
     if args.remote:  # Vivian's voice back to the Mac (audio_recv.py --port RETURN_PORT there)
@@ -664,8 +763,9 @@ def main():
     p.add_argument("--text", action="store_true", help="type your turns instead of speaking")
     p.add_argument("--cable", default="CABLE Input", help="output feeding Unreal's Live Link audio source")
     p.add_argument("--monitor", default="Jabra", help='output you listen on ("" to disable)')
-    p.add_argument("--monitor-delay", type=float, default=0.50,
-                   help="headset delay so voice matches the lips (measured ~505 ms at lookahead 240, ~335 ms at 80; "
+    p.add_argument("--monitor-delay", type=float, default=0.65,
+                   help="headset delay so voice matches the lips (measured ~505 ms at lookahead 240 with one viewport, "
+                        "~645 ms with the split screen; ~335 ms at lookahead 80; "
                         "re-measure with unreal-integration/scripts/lipsync_latency.py)")
     p.add_argument("--prebuffer", type=float, default=0.2, help="seconds of TTS audio buffered before playback starts")
     p.add_argument("--lookahead", type=int, default=240, help="audio solver lookahead, 80-240 ms (higher = better lips, more lag)")
@@ -681,6 +781,10 @@ def main():
     p.add_argument("--mic-level", type=float, default=0.004, help="mic RMS counted as speech, for the timing log only")
     p.add_argument("--tail", type=float, default=0.4, help="seconds after the reply before listening again")
     p.add_argument("--subject", default="MH_Audio")
+    p.add_argument("--restart-audio", dest="preset", nargs="?", const="/Game/LiveLink/LLP_MH_Audio", default="",
+                   help="re-apply this Live Link preset at startup to restart a frozen audio source (jaw stuck). Off by "
+                        "default: the restarted source lip-synced worse (~0.65 s lag, weaker mouth) than after an "
+                        "editor restart, which is the better fix")
     p.add_argument("--camera", default="CAM_Face", help="actor the avatar looks at now and then")
     p.add_argument("--gaze-pitch-fix", type=float, default=3.8, help="degrees to aim the head below the camera so the eyes meet it")
     p.add_argument("--actor", default="MH_Avatar", help="level actor label of the MetaHuman")
@@ -691,6 +795,8 @@ def main():
     p.add_argument("--body-moods", action="store_true",
                    help="also switch the body loop per mood. Off by default: the emotion loops' posture differs "
                         "19-26 deg at the neck from the idle, so every reply leaned in and swung back")
+    p.add_argument("--no-workspace", dest="workspace", action="store_false",
+                   help="no table / [[place ...]] actions (needs the two-pane viewport layout, see workspace.py)")
     p.add_argument("--greeting", default="[happy] Hi! I'm your digital human. Say something and I'll answer.")
     args = p.parse_args()
     GAZE.update(camera=args.camera, pitch_fix=args.gaze_pitch_fix)

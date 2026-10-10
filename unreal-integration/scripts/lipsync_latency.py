@@ -46,6 +46,7 @@ def main():
     p.add_argument("--hostapi", default="", help='e.g. "WASAPI" (Windows: the first match is otherwise MME)')
     p.add_argument("--gap", type=float, default=1.5)
     p.add_argument("--lead", type=float, default=2.0, help="silence recorded before the first clip")
+    p.add_argument("--max-lag", type=float, default=3.0, help="longest lag searched (s)")
     p.add_argument("--tail", type=float, default=2.0)
     p.add_argument("--label", default="MH_Avatar", help="actor label of the MetaHuman")
     a = p.parse_args()
@@ -87,7 +88,7 @@ def main():
         env[k:k + len(e)] = e[: max(0, len(env) - k)]
         windows.append((s, s + len(data) / rate))
 
-    lags = np.arange(0.0, 0.8, HOP)
+    lags = np.arange(0.0, a.max_lag, HOP)
     jc = jaw - jaw.mean()
     corr = [np.corrcoef(jc, np.interp(t - L, grid, env))[0, 1] for L in lags]
     best = lags[int(np.argmax(corr))]
